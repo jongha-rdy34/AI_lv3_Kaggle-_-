@@ -41,6 +41,7 @@ Q2 모의 인코더는 "사전학습 임베딩은 처음 보는 표현도 의미
 
 ```
 Lv3_모의_v1_문제.ipynb    ← 여기서 풉니다 (출력 없음)
+Lv3_v1_점수개선_실습.ipynb ← v1을 푼 뒤: 매뉴얼의 레버를 직접 적용 (8절)
 practice_support.py       ← 연습용 도우미 (공식 exam_data.py 등이 아님)
 Reference.md              ← 시험 중 볼 수 있다고 가정한 공통 참고자료
 data/q1  train.csv, test.csv, sample_submission.csv
@@ -50,7 +51,8 @@ assets/  q3_backbone.pt, SOURCE.md
 제출물/   ← 풀이하면 q1~q3_submission.csv가 생깁니다
 정답_채점용/  ← 풀이 끝까지 열지 마세요
     Lv3_모의_v1_정답.ipynb (실행 출력 포함), score_local.py, q*_truth.csv,
-    정답_제출예시/, 검증결과.md, _build/ (데이터·노트북 생성기)
+    Lv3_v1_점수개선_실습_정답.ipynb, 정답_제출예시/, 정답_제출예시_개선/,
+    검증결과.md, _build/ (데이터·노트북 생성기)
 ```
 
 ## 5. 실행과 채점
@@ -98,3 +100,17 @@ Lv2 제출본의 자체 예상 채점은 94/100이며 공식 점수가 아닙니
 4. `ColumnTransformer`(중앙값+표준화 / 최빈값+원-핫 `handle_unknown="ignore"`) + K-fold 루프
 5. `AdaptiveAvgPool2d(1)` 헤드 + `requires_grad` 고정·해제 + 학습 파라미터만 optimizer에 넘기기
 6. `train_one_epoch` / `evaluate`(`model.eval()` + `torch.no_grad()`) / 배치 추론
+
+## 8. 점수 개선 실습 (`Lv3_v1_점수개선_실습.ipynb`)
+
+v1 본 문제를 **푼 뒤에** 여세요. v1 정답 함수를 기본 코드로 제공합니다. 상위 폴더의 `[claude]Lv3_점수개선_매뉴얼.md`에 나온 **지·기·검·진·레·후·합** 순서를 그대로 따릅니다. 빈칸은 11개이고, 전체 실행에 CPU로 약 2~3분이 걸립니다.
+
+| 문항 | 작성할 것 | 배우는 레버 |
+|---|---|---|
+| Q1 | `add_domain_features`, `search_alpha`, `best_blend_weight` | 특징 → 정규화 강도 → OOF 앙상블(개선폭이 0.01보다 작으면 채택하지 않음) |
+| Q2 | `oov_ratio`, `tfidf_grid`, `l2_normalize`·`emb_logreg`, 최종 선택과 이유 | 분포 변화 진단 → 분류기 튜닝의 한계 → 표현 바꾸기 |
+| Q3 | `fit`(optimizer 재생성 + best 체크포인트), `diagnose`, `augment_batch`, `predict_proba`(TTA) | 진단 → 학습 범위·epoch → 증강 → TTA |
+
+- 채택은 validation(CV)으로만 합니다. 마지막 셀에서 test 점수를 **한 번만** 확인합니다.
+- 결과는 `제출물_개선/`에 저장되므로 v1 `제출물/`과 섞이지 않습니다.
+- 정답판 결과(test): Q1 RMSE 6.420 → 6.328, Q2 macro-F1 0.983 → 0.984, Q3 accuracy 0.821 → 0.986.
