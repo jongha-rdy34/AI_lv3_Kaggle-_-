@@ -1,0 +1,15 @@
+# [claude] AI 챌린지 반영 VQA 모의문제 — Colab 실제판 (GPU 런타임)
+# 노트북 첫 셀이 baseline과 같은 방식으로 설치합니다. 직접 설치하려면:
+#   pip install -r requirements_colab.txt
+# torch / torchvision / torchaudio는 Colab에 기본 설치되어 있습니다(baseline은 cu121 휠로 다시 설치).
+# 작성 PC에 GPU가 없어 이 조합은 실행 검증하지 못했습니다. 버전은 baseline 노트북의 설치 셀을 따랐습니다.
+
+transformers        # baseline: git+https://github.com/huggingface/transformers (Qwen2.5-VL 지원 버전 필요)
+accelerate
+peft>=0.13.2
+bitsandbytes==0.46.1
+datasets
+pillow
+pandas
+matplotlib
+tqdm

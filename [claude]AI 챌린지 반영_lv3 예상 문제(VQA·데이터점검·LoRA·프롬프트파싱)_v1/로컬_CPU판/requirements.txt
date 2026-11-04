@@ -1,0 +1,17 @@
+# [claude] AI 챌린지 반영 VQA 모의문제 — 로컬 CPU판
+# 설치:  pip install -r requirements.txt
+# torch CPU 전용 휠을 원하면:  pip install torch --index-url https://download.pytorch.org/whl/cpu
+#
+# 작성 PC에서 검증한 버전(Windows 10, Python 3.12.2):
+#   numpy 2.5.2, pandas 3.0.5, pillow 12.3.0, matplotlib 3.11.1, torch 2.5.1+cpu,
+#   jupyterlab 4.6.3, ipykernel 7.3.0
+# transformers / peft / bitsandbytes는 필요 없습니다(mini_vlm.py가 대신함).
+
+numpy>=2.0
+pandas>=2.2
+pillow>=10.0
+matplotlib>=3.8
+torch>=2.5
+tqdm>=4.66          # 없어도 동작(간단한 진행 표시로 대체)
+jupyterlab>=4.0
+ipykernel>=6.0
