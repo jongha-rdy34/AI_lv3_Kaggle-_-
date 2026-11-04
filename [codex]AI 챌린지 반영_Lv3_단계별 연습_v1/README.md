@@ -43,3 +43,33 @@ python 정답_채점용/로컬채점.py --version V1
 설정 셀의 학습률/학습 횟수/학습 범위를 하나씩 바꾸고 같은 validation으로 비교합니다. 마지막 선택 실험은 `RUN_EXTRA_TRIAL=True`로 실행할 수 있으며, 후보의 검증 macro-F1이 더 좋을 때만 모델과 CSV를 바꿉니다. 점수 향상을 보장하는 설정은 아닙니다. test 정답으로 설정을 선택하지 마세요.
 
 최신 공지는 요구사항·풀이 과정과 최종 코드 리뷰도 평가한다고 명시합니다. 점수만 보지 말고 바꾼 코드의 이유를 설명하는 연습을 병행하세요. 실제 모델·지표·수정 범위·제출 방식은 현장 공지와 지문이 우선입니다.
+
+
+## 패키지 설치 — requirements.txt
+
+이 세트의 V1/V2/V3 문제와 정답에 공통으로 사용하는 패키지는 `requirements.txt`에 있습니다. **64비트 Python 3.11 또는 3.12를 사용하세요. 실제 실행 검증은 Python 3.12에서 했습니다.** 최신 버전의 문제를 위한 목록이며 모든 패키지의 최신 버전을 요구한다는 뜻은 아닙니다. torch는 앞서 검증한 2.5.1+cpu로 고정하고 나머지는 호환 범위로 지정했습니다.
+
+현재 이 폴더를 터미널에서 연 뒤 다음을 실행합니다. 패키지를 내려받는 최초 설치에는 인터넷이 필요합니다. 학습·추론은 이후 오프라인으로 진행할 수 있습니다.
+
+```powershell
+python -m pip install -r requirements.txt
+python -m jupyterlab
+```
+
+기존 환경과 분리해 설치하려면 아래처럼 Python 3.12 가상환경을 만들 수 있습니다. PowerShell 활성화 정책에 영향을 받지 않도록 가상환경 Python을 직접 호출합니다.
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m jupyterlab
+```
+
+브라우저에서 노트북을 열고 Python 커널을 선택합니다. 이미 열려 있던 Jupyter에서 계속한다면 설치한 환경과 커널이 다를 수 있으므로, 가능하면 위 명령으로 새로 실행하세요.
+
+설치 확인:
+
+```powershell
+python -c "import numpy, pandas, PIL, matplotlib, sklearn, torch; print('모두 import 성공 / torch:', torch.__version__)"
+```
+
+가상환경을 사용했다면 `python` 대신 `.\.venv\Scripts\python.exe`로 확인합니다. `sklearn`의 pip 설치명은 `scikit-learn`, `PIL`의 설치명은 `Pillow`입니다. 본 세트에는 torchvision, transformers, peft, bitsandbytes가 필요하지 않습니다. CPU 전용 wheel을 사용하므로 GPU 드라이버나 CUDA 별도 설치도 요구하지 않습니다. [PyTorch 공식 이전 버전 설치 안내](https://pytorch.org/get-started/previous-versions/)

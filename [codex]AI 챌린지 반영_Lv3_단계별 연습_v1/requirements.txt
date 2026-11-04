@@ -1,0 +1,24 @@
+# Windows x64 / Python 3.11 or 3.12 (validated with Python 3.12).
+# Install from this folder: python -m pip install -r requirements.txt
+# CPU-only PyTorch; no NVIDIA GPU or CUDA toolkit is required for these notebooks.
+# Official CPU wheels: https://pytorch.org/get-started/previous-versions/
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# Numerical data and tables
+numpy>=1.26,<3
+pandas>=2.2,<4
+
+# PIL is installed under the package name Pillow.
+Pillow>=10.4,<13
+matplotlib>=3.8,<4
+
+# Import name: sklearn; installation name: scikit-learn.
+scikit-learn>=1.4,<2
+
+# This CPU version was used to validate the supplied pretrained checkpoint.
+torch==2.5.1+cpu
+
+# Notebook interface, Python kernel, and notebook file format support
+jupyterlab>=4.2,<5
+ipykernel>=6.29,<8
+nbformat>=5.10,<6
