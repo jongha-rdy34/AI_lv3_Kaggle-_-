@@ -1,0 +1,482 @@
+{
+ "N041": {
+  "age": 60,
+  "sex": "M",
+  "chief_complaint": "abdominal_pain",
+  "symptom_days": 10,
+  "temperature_c": 37.5,
+  "medications": [
+   {
+    "name": "amoxicillin",
+    "dose_mg": null,
+    "times_per_day": 2
+   }
+  ],
+  "allergy": null,
+  "follow_up_days": 14
+ },
+ "N042": {
+  "age": 9,
+  "sex": "F",
+  "chief_complaint": "headache",
+  "symptom_days": 4,
+  "temperature_c": null,
+  "medications": [
+   {
+    "name": "cetirizine",
+    "dose_mg": 10,
+    "times_per_day": 2
+   }
+  ],
+  "allergy": null,
+  "follow_up_days": null
+ },
+ "N043": {
+  "age": 37,
+  "sex": null,
+  "chief_complaint": "rash",
+  "symptom_days": 7,
+  "temperature_c": 36.1,
+  "medications": [
+   {
+    "name": "acetaminophen",
+    "dose_mg": 650,
+    "times_per_day": 1
+   },
+   {
+    "name": "ibuprofen",
+    "dose_mg": 400,
+    "times_per_day": 1
+   }
+  ],
+  "allergy": null,
+  "follow_up_days": 14
+ },
+ "N044": {
+  "age": 24,
+  "sex": "F",
+  "chief_complaint": "fever",
+  "symptom_days": 1,
+  "temperature_c": 37.7,
+  "medications": [],
+  "allergy": true,
+  "follow_up_days": null
+ },
+ "N045": {
+  "age": 30,
+  "sex": "M",
+  "chief_complaint": "cough",
+  "symptom_days": 14,
+  "temperature_c": 36.6,
+  "medications": [
+   {
+    "name": "ibuprofen",
+    "dose_mg": 400,
+    "times_per_day": null
+   },
+   {
+    "name": "cetirizine",
+    "dose_mg": 10,
+    "times_per_day": 1
+   }
+  ],
+  "allergy": true,
+  "follow_up_days": null
+ },
+ "N046": {
+  "age": 36,
+  "sex": "F",
+  "chief_complaint": "rash",
+  "symptom_days": 14,
+  "temperature_c": null,
+  "medications": [
+   {
+    "name": "amoxicillin",
+    "dose_mg": null,
+    "times_per_day": 2
+   },
+   {
+    "name": "cetirizine",
+    "dose_mg": 10,
+    "times_per_day": 2
+   }
+  ],
+  "allergy": null,
+  "follow_up_days": null
+ },
+ "N047": {
+  "age": 19,
+  "sex": "M",
+  "chief_complaint": "rash",
+  "symptom_days": 1,
+  "temperature_c": 36.2,
+  "medications": [
+   {
+    "name": "ibuprofen",
+    "dose_mg": 200,
+    "times_per_day": 1
+   }
+  ],
+  "allergy": false,
+  "follow_up_days": null
+ },
+ "N048": {
+  "age": 30,
+  "sex": "M",
+  "chief_complaint": "fever",
+  "symptom_days": null,
+  "temperature_c": 39.7,
+  "medications": [
+   {
+    "name": "amoxicillin",
+    "dose_mg": 250,
+    "times_per_day": null
+   },
+   {
+    "name": "cetirizine",
+    "dose_mg": null,
+    "times_per_day": 1
+   }
+  ],
+  "allergy": null,
+  "follow_up_days": null
+ },
+ "N049": {
+  "age": 51,
+  "sex": null,
+  "chief_complaint": "cough",
+  "symptom_days": null,
+  "temperature_c": 37.8,
+  "medications": [
+   {
+    "name": "cetirizine",
+    "dose_mg": 10,
+    "times_per_day": 2
+   },
+   {
+    "name": "acetaminophen",
+    "dose_mg": 650,
+    "times_per_day": 3
+   }
+  ],
+  "allergy": false,
+  "follow_up_days": 14
+ },
+ "N050": {
+  "age": 84,
+  "sex": null,
+  "chief_complaint": "headache",
+  "symptom_days": 1,
+  "temperature_c": 39.9,
+  "medications": [
+   {
+    "name": "cetirizine",
+    "dose_mg": 10,
+    "times_per_day": 2
+   }
+  ],
+  "allergy": null,
+  "follow_up_days": null
+ },
+ "N051": {
+  "age": 15,
+  "sex": "F",
+  "chief_complaint": "headache",
+  "symptom_days": 4,
+  "temperature_c": 39.8,
+  "medications": [
+   {
+    "name": "cetirizine",
+    "dose_mg": 10,
+    "times_per_day": 3
+   }
+  ],
+  "allergy": null,
+  "follow_up_days": 14
+ },
+ "N052": {
+  "age": 84,
+  "sex": null,
+  "chief_complaint": "rash",
+  "symptom_days": 10,
+  "temperature_c": 39.9,
+  "medications": [
+   {
+    "name": "amoxicillin",
+    "dose_mg": 250,
+    "times_per_day": 1
+   }
+  ],
+  "allergy": true,
+  "follow_up_days": 7
+ },
+ "N053": {
+  "age": 59,
+  "sex": "F",
+  "chief_complaint": "rash",
+  "symptom_days": 5,
+  "temperature_c": 36.2,
+  "medications": [],
+  "allergy": false,
+  "follow_up_days": null
+ },
+ "N054": {
+  "age": null,
+  "sex": "F",
+  "chief_complaint": "abdominal_pain",
+  "symptom_days": 2,
+  "temperature_c": 36.2,
+  "medications": [],
+  "allergy": false,
+  "follow_up_days": 14
+ },
+ "N055": {
+  "age": 40,
+  "sex": "F",
+  "chief_complaint": "headache",
+  "symptom_days": 14,
+  "temperature_c": 37.4,
+  "medications": [
+   {
+    "name": "cetirizine",
+    "dose_mg": 10,
+    "times_per_day": 1
+   }
+  ],
+  "allergy": null,
+  "follow_up_days": 3
+ },
+ "N056": {
+  "age": 29,
+  "sex": "M",
+  "chief_complaint": "cough",
+  "symptom_days": 10,
+  "temperature_c": 38.0,
+  "medications": [
+   {
+    "name": "ibuprofen",
+    "dose_mg": 200,
+    "times_per_day": 3
+   }
+  ],
+  "allergy": null,
+  "follow_up_days": 5
+ },
+ "N057": {
+  "age": 26,
+  "sex": "M",
+  "chief_complaint": "headache",
+  "symptom_days": 3,
+  "temperature_c": 36.3,
+  "medications": [
+   {
+    "name": "ibuprofen",
+    "dose_mg": 200,
+    "times_per_day": 1
+   }
+  ],
+  "allergy": null,
+  "follow_up_days": 5
+ },
+ "N058": {
+  "age": 61,
+  "sex": "M",
+  "chief_complaint": "cough",
+  "symptom_days": null,
+  "temperature_c": 38.1,
+  "medications": [
+   {
+    "name": "amoxicillin",
+    "dose_mg": 500,
+    "times_per_day": 2
+   }
+  ],
+  "allergy": null,
+  "follow_up_days": 3
+ },
+ "N059": {
+  "age": 38,
+  "sex": "M",
+  "chief_complaint": "rash",
+  "symptom_days": 4,
+  "temperature_c": 37.9,
+  "medications": [],
+  "allergy": true,
+  "follow_up_days": 5
+ },
+ "N060": {
+  "age": 5,
+  "sex": "M",
+  "chief_complaint": "rash",
+  "symptom_days": 10,
+  "temperature_c": null,
+  "medications": [
+   {
+    "name": "ibuprofen",
+    "dose_mg": 200,
+    "times_per_day": 3
+   },
+   {
+    "name": "ibuprofen",
+    "dose_mg": 400,
+    "times_per_day": 3
+   }
+  ],
+  "allergy": null,
+  "follow_up_days": null
+ },
+ "N061": {
+  "age": 68,
+  "sex": "F",
+  "chief_complaint": "fever",
+  "symptom_days": 2,
+  "temperature_c": null,
+  "medications": [
+   {
+    "name": "ibuprofen",
+    "dose_mg": 200,
+    "times_per_day": 1
+   }
+  ],
+  "allergy": null,
+  "follow_up_days": null
+ },
+ "N062": {
+  "age": 51,
+  "sex": "F",
+  "chief_complaint": "headache",
+  "symptom_days": 4,
+  "temperature_c": 38.4,
+  "medications": [
+   {
+    "name": "amoxicillin",
+    "dose_mg": 500,
+    "times_per_day": 1
+   }
+  ],
+  "allergy": null,
+  "follow_up_days": 3
+ },
+ "N063": {
+  "age": 36,
+  "sex": "M",
+  "chief_complaint": "rash",
+  "symptom_days": null,
+  "temperature_c": null,
+  "medications": [
+   {
+    "name": "acetaminophen",
+    "dose_mg": 650,
+    "times_per_day": 2
+   }
+  ],
+  "allergy": false,
+  "follow_up_days": 7
+ },
+ "N064": {
+  "age": 41,
+  "sex": "F",
+  "chief_complaint": "headache",
+  "symptom_days": 10,
+  "temperature_c": null,
+  "medications": [
+   {
+    "name": "acetaminophen",
+    "dose_mg": 650,
+    "times_per_day": 1
+   }
+  ],
+  "allergy": null,
+  "follow_up_days": 5
+ },
+ "N065": {
+  "age": 80,
+  "sex": "F",
+  "chief_complaint": "cough",
+  "symptom_days": 10,
+  "temperature_c": 37.7,
+  "medications": [],
+  "allergy": true,
+  "follow_up_days": 5
+ },
+ "N066": {
+  "age": 53,
+  "sex": "M",
+  "chief_complaint": "headache",
+  "symptom_days": 14,
+  "temperature_c": 37.2,
+  "medications": [
+   {
+    "name": "acetaminophen",
+    "dose_mg": 500,
+    "times_per_day": 2
+   }
+  ],
+  "allergy": null,
+  "follow_up_days": 14
+ },
+ "N067": {
+  "age": 72,
+  "sex": "F",
+  "chief_complaint": "abdominal_pain",
+  "symptom_days": 7,
+  "temperature_c": 38.7,
+  "medications": [
+   {
+    "name": "ibuprofen",
+    "dose_mg": 200,
+    "times_per_day": 3
+   }
+  ],
+  "allergy": false,
+  "follow_up_days": 5
+ },
+ "N068": {
+  "age": 22,
+  "sex": "F",
+  "chief_complaint": "abdominal_pain",
+  "symptom_days": 3,
+  "temperature_c": 36.0,
+  "medications": [
+   {
+    "name": "cetirizine",
+    "dose_mg": null,
+    "times_per_day": 1
+   }
+  ],
+  "allergy": null,
+  "follow_up_days": null
+ },
+ "N069": {
+  "age": 33,
+  "sex": "F",
+  "chief_complaint": "headache",
+  "symptom_days": 2,
+  "temperature_c": null,
+  "medications": [
+   {
+    "name": "ibuprofen",
+    "dose_mg": 200,
+    "times_per_day": null
+   }
+  ],
+  "allergy": null,
+  "follow_up_days": 14
+ },
+ "N070": {
+  "age": 3,
+  "sex": null,
+  "chief_complaint": "abdominal_pain",
+  "symptom_days": 3,
+  "temperature_c": 36.1,
+  "medications": [
+   {
+    "name": "ibuprofen",
+    "dose_mg": 200,
+    "times_per_day": null
+   }
+  ],
+  "allergy": true,
+  "follow_up_days": 7
+ }
+}

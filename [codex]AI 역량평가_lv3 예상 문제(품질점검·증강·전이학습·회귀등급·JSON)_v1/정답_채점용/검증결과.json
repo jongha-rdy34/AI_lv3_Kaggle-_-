@@ -1,0 +1,22 @@
+{
+  "q1_clean_rows": 508,
+  "q3_valid_macro_f1": 0.4370951920988985,
+  "q4_selection": {
+    "rmse": 10.434627313876057,
+    "qwk": 0.17494944543170543,
+    "unfreeze_last": true
+  },
+  "q3_test": {
+    "metric": "macro_f1",
+    "value": 0.4228472713613055
+  },
+  "q4_test": {
+    "rmse": 11.873449733007142,
+    "qwk": 0.15698838606327603
+  },
+  "q2_weight_test": true,
+  "q5_manual_examples_match": true,
+  "q5_invalid_types_rejected": true,
+  "q5_real_llm_executed": false,
+  "duplicate_submission_id_rejected": true
+}

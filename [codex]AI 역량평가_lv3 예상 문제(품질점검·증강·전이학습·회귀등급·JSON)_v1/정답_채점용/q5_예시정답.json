@@ -1,0 +1,42 @@
+[
+  {
+    "id": "N01",
+    "model": "A15",
+    "issues": [
+      "battery"
+    ],
+    "duration_minutes": 90,
+    "warranty": null,
+    "repair_completed": false
+  },
+  {
+    "id": "N02",
+    "model": "Z7",
+    "issues": [
+      "fan"
+    ],
+    "duration_minutes": null,
+    "warranty": null,
+    "repair_completed": true
+  },
+  {
+    "id": "N03",
+    "model": null,
+    "issues": [
+      "storage"
+    ],
+    "duration_minutes": null,
+    "warranty": false,
+    "repair_completed": null
+  },
+  {
+    "id": "N04",
+    "model": "K2",
+    "issues": [
+      "display"
+    ],
+    "duration_minutes": 45,
+    "warranty": true,
+    "repair_completed": false
+  }
+]
