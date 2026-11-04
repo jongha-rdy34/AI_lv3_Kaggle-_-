@@ -25,7 +25,7 @@ import torch.nn.functional as F
 
 HERE = Path(__file__).resolve().parent
 SPECIALS = ["<pad>", "<unk>", "<|im_start|>", "<|im_end|>", "<image>"]
-N_IMAGE_TOKENS = 8          # 사진 한 장 = <image> 토큰 8개 (2행 × 4열)
+N_IMAGE_TOKENS = 4          # 사진 한 장 = <image> 토큰 4개 (세로 띠 4개)
 IMAGE_SIZE = 64             # 이 판의 입력 크기 (Colab판 IMAGE_SIZE=384와 다름)
 
 
@@ -143,7 +143,7 @@ class MiniProcessor:
 # ======================================================================
 # 실제 VLM은 거대한 트랜스포머가 사진·질문·보기를 한꺼번에 읽습니다. CPU에서 짧게 학습할 수 있도록
 # 이 연습용 모델은 구조를 단순화했습니다.
-#  (1) 정답 자리: 질문 단어 평균 + 보기 단어 평균이 사진 토큰을 cross-attention → 보기마다 점수 → a~d 로짓
+#  (1) 정답 자리: 질문 단어 평균 + 보기 단어 평균 + 보기 글자(a~d)가 사진 토큰을 cross-attention → 보기마다 점수 → a~d 로짓
 #  (2) 나머지 자리: 같은 MLP 층을 지나는 '다음 토큰 예측'(작은 언어모델)
 # 두 경로가 같은 층(q_proj ... down_proj)을 공유하므로, 정답 이외 토큰까지 손실에 넣으면(label mask 없음)
 # LoRA가 그 토큰들을 맞히는 데에도 힘을 나눠 쓰게 됩니다. 실제 모델에서도 생기는 현상입니다.
@@ -190,18 +190,18 @@ class Block(nn.Module):
 
 
 class Visual(nn.Module):
-    """사진 (B,3,64,64) → 시각 토큰 (B,8,d)  (2행 × 4열)."""
+    """사진 (B,3,64,64) → 시각 토큰 (B,4,d)  (왼쪽부터 세로 띠 4개)."""
 
     def __init__(self, d):
         super().__init__()
         c = lambda i, o: nn.Sequential(nn.Conv2d(i, o, 3, padding=1), nn.GroupNorm(8, o), nn.ReLU(), nn.MaxPool2d(2))
-        self.conv = nn.Sequential(c(3, 32), c(32, 64), c(64, 96), c(96, 128))   # 64 → 4
-        self.pool = nn.AdaptiveAvgPool2d((2, 4))
-        self.merger = nn.Linear(128, d)
+        self.conv = nn.Sequential(c(3, 16), c(16, 32), c(32, 64), c(64, 96))   # 64 → 4
+        self.pool = nn.AdaptiveMaxPool2d((1, 4))
+        self.merger = nn.Linear(96, d)
         self.pos = nn.Parameter(torch.zeros(1, N_IMAGE_TOKENS, d))
 
     def forward(self, x):
-        f = self.pool(self.conv(x)).flatten(2).transpose(1, 2)  # (B,8,128)
+        f = self.pool(self.conv(x)).flatten(2).transpose(1, 2)  # (B,4,96)
         return self.merger(f) + self.pos
 
 
@@ -254,7 +254,9 @@ class MiniVLM(nn.Module):
             img = self.visual(pixel_values)
             mean = lambda b, idx: emb[b, idx].mean(0) if idx else emb.new_zeros(emb.shape[-1])
             parsed = [self._parse(input_ids[b].tolist()) for b in range(B)]
+            letter_emb = self.embed_tokens(torch.tensor(self.ids.letters, device=emb.device))   # (4,d) 보기 글자 a~d
             h = torch.stack([torch.stack([mean(b, q) + mean(b, o) for o in opts]) for b, (q, opts, _) in enumerate(parsed)])
+            h = h + letter_emb[None]                                       # 보기 위치(글자) 정보 → 글자 쏠림도 배울 수 있음
             for layer in self.layers:
                 h = layer(h, img)
             scores = self.score_head(self.norm(h)).squeeze(-1)            # (B,4)

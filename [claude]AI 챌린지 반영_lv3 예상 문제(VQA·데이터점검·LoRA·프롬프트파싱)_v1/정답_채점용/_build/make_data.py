@@ -104,8 +104,8 @@ def make_question(rng, objs, templates, letter_p):
     return qtype, q, opts, LETTERS[pos]
 
 
-def build_rows(rng, n, templates, letter_p, prefix, img_dir=None):
-    rows, images = [], []
+def build_rows(rng, n, templates, letter_p, prefix, img_dir=None, return_objs=False):
+    rows, images, all_objs = [], [], []
     for i in range(n):
         img, objs = draw_scene(rng)
         qtype, q, opts, ans = make_question(rng, objs, templates, letter_p)
@@ -113,8 +113,11 @@ def build_rows(rng, n, templates, letter_p, prefix, img_dir=None):
         rows.append({"id": rid, "path": f"{prefix.lower()}/{rid}.png", "question": q,
                      "a": opts[0], "b": opts[1], "c": opts[2], "d": opts[3], "answer": ans, "qtype": qtype})
         images.append(img)
+        all_objs.append(objs)
         if img_dir is not None:
             Image.fromarray(img).save(img_dir / f"{rid}.png")
+    if return_objs:
+        return pd.DataFrame(rows), images, all_objs
     return pd.DataFrame(rows), images
 
 
@@ -220,6 +223,130 @@ def pretrain(epochs=10, n_total=6000):
     proc.save_pretrained(LOCAL / "assets")
 
 
+def pretrain_fast(n_total=20000, epochs=20, lm_steps=300):
+    """단계별 사전학습 (실제 VLM이 사전학습된 비전 인코더를 쓰는 것과 비슷하게).
+
+    1) 비전 인코더: 세로 띠 토큰 4개가 각 띠의 도형 유무·모양·색을 알도록 지도학습
+    2) 정답 점수 경로: 비전 특징을 캐시해 두고, 질문 평균 + 보기 평균 + 보기 글자 → cross-attention → 점수 학습
+       (MiniVLM.forward의 정답 경로와 같은 계산)
+    3) 언어모델 경로: 프롬프트 토큰의 다음 토큰 예측을 짧게 학습
+    """
+    import torch
+    import torch.nn.functional as F
+    from mini_vlm import MiniTokenizer, MiniProcessor, MiniVLM
+    rng = np.random.default_rng(7)
+    torch.manual_seed(0); torch.set_num_threads(4)
+    tok = MiniTokenizer(vocab_tokens()); proc = MiniProcessor(tok)
+    model = MiniVLM(len(tok)); model.set_special_ids(tok)
+    letters = torch.tensor(model.ids.letters)
+    d = model.config.d
+    color_names, shape_names = list(COLORS), SHAPES
+
+    def make_struct(templates, n, seed):
+        r = np.random.default_rng(seed)
+        df, imgs, objs = build_rows(r, n, templates, [0.25] * 4, "X", return_objs=True)
+        def pad(seqs):
+            L = max(len(x) for x in seqs)
+            ids = torch.zeros(len(seqs), L, dtype=torch.long); m = torch.zeros(len(seqs), L)
+            for i, x in enumerate(seqs):
+                ids[i, :len(x)] = torch.tensor(x); m[i, :len(x)] = 1
+            return ids, m
+        q_ids, q_m = pad([tok.encode(q) for q in df.question])
+        o_ids, o_m = pad([tok.encode(" " + str(t)) for t in df[["a", "b", "c", "d"]].to_numpy().ravel()])
+        # 띠별 정답(유무 / 모양 / 색), 도형 없는 띠는 -100
+        present = torch.zeros(n, 4); shape_y = torch.full((n, 4), -100); color_y = torch.full((n, 4), -100)
+        for i, ob in enumerate(objs):
+            for o in ob:
+                col = int(round((o["x"] - 8) / 16))
+                present[i, col] = 1; shape_y[i, col] = shape_names.index(o["shape"]); color_y[i, col] = color_names.index(o["color"])
+        pix = (torch.from_numpy(np.stack(imgs)).permute(0, 3, 1, 2).float() / 255 - 0.5) / 0.25
+        return dict(q=q_ids, qm=q_m, o=o_ids.view(n, 4, -1), om=o_m.view(n, 4, -1), pix=pix,
+                    y=torch.tensor([LETTERS.index(a) for a in df.answer]), present=present, shape=shape_y, color=color_y, df=df)
+
+    t0 = time.time()
+    tr = make_struct(PRETRAIN_Q, n_total, 7)
+    ho = make_struct(PRETRAIN_Q, 1000, 8)
+    tg = make_struct(TARGET_Q, 1000, 9)        # 목표 과제 문장(제로샷 확인용)
+    print(f"  데이터 준비 {time.time() - t0:.0f}s", flush=True)
+
+    # ---- 1) 비전 인코더 ----
+    heads = torch.nn.ModuleDict({"p": torch.nn.Linear(d, 1), "s": torch.nn.Linear(d, 4), "c": torch.nn.Linear(d, 6)})
+    opt = torch.optim.AdamW(list(model.visual.parameters()) + list(heads.parameters()), lr=2e-3)
+    bs = 128
+    for ep in range(4):
+        t0 = time.time(); perm = torch.randperm(n_total); model.visual.train()
+        for s in range(0, n_total - bs + 1, bs):
+            idx = perm[s:s + bs]
+            v = model.visual(tr["pix"][idx])
+            loss = (F.binary_cross_entropy_with_logits(heads["p"](v).squeeze(-1), tr["present"][idx])
+                    + F.cross_entropy(heads["s"](v).reshape(-1, 4), tr["shape"][idx].reshape(-1), ignore_index=-100)
+                    + F.cross_entropy(heads["c"](v).reshape(-1, 6), tr["color"][idx].reshape(-1), ignore_index=-100))
+            opt.zero_grad(); loss.backward(); opt.step()
+        model.visual.eval()
+        with torch.no_grad():
+            v = model.visual(ho["pix"]); m = ho["shape"] != -100
+            sa = (heads["s"](v).argmax(-1)[m] == ho["shape"][m]).float().mean().item()
+            ca = (heads["c"](v).argmax(-1)[m] == ho["color"][m]).float().mean().item()
+        print(f"  [비전] ep{ep} loss {loss.item():.3f} | 모양 {sa:.3f} 색 {ca:.3f} ({time.time() - t0:.0f}s)", flush=True)
+
+    # ---- 2) 정답 점수 경로 (비전 고정, 특징 캐시) ----
+    for p in model.visual.parameters():
+        p.requires_grad = False
+    with torch.no_grad():
+        for dd in (tr, ho, tg):
+            dd["img"] = torch.cat([model.visual(dd["pix"][s:s + 512]) for s in range(0, len(dd["y"]), 512)])
+
+    def scores(dd, idx):
+        e = model.embed_tokens
+        q = (e(dd["q"][idx]) * dd["qm"][idx][..., None]).sum(1) / dd["qm"][idx].sum(1, keepdim=True).clamp(min=1)
+        o = (e(dd["o"][idx]) * dd["om"][idx][..., None]).sum(2) / dd["om"][idx].sum(2, keepdim=True).clamp(min=1)
+        h = q[:, None] + o + e(letters)[None]
+        for layer in model.layers:
+            h = layer(h, dd["img"][idx])
+        return model.score_head(model.norm(h)).squeeze(-1)
+
+    def acc(dd):
+        with torch.no_grad():
+            return (scores(dd, torch.arange(len(dd["y"]))).argmax(1) == dd["y"]).float().mean().item()
+
+    params = [p for p in model.parameters() if p.requires_grad]
+    opt = torch.optim.AdamW(params, lr=2e-3, weight_decay=0.01)
+    sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=2e-3, total_steps=epochs * (n_total // bs), pct_start=0.1)
+    for ep in range(epochs):
+        t0 = time.time(); model.train(); perm = torch.randperm(n_total)
+        for s in range(0, n_total - bs + 1, bs):
+            idx = perm[s:s + bs]
+            loss = F.cross_entropy(scores(tr, idx), tr["y"][idx])
+            opt.zero_grad(); loss.backward(); opt.step(); sched.step()
+        model.eval()
+        print(f"  [점수] ep{ep} loss {loss.item():.3f} | 사전학습 문장 {acc(ho):.3f} | 목표 문장(제로샷) {acc(tg):.3f} ({time.time() - t0:.0f}s)", flush=True)
+
+    # ---- 3) 언어모델 경로 (lm_head·위치 임베딩만) ----
+    lm_params = list(model.lm_head.parameters()) + list(model.embed_positions.parameters())
+    for p in model.parameters():
+        p.requires_grad = False
+    for p in lm_params:
+        p.requires_grad = True
+    opt = torch.optim.AdamW(lm_params, lr=3e-3)
+    texts = []
+    for r in tr["df"].head(2000).itertuples():
+        msgs = [{"role": "system", "content": [{"type": "text", "text": SYSTEM_INSTRUCT}]},
+                {"role": "user", "content": [{"type": "image"}, {"type": "text", "text": build_mc_prompt(r.question, r.a, r.b, r.c, r.d)}]},
+                {"role": "assistant", "content": [{"type": "text", "text": r.answer}]}]
+        texts.append(proc.apply_chat_template(msgs))
+    model.train()
+    for step in range(lm_steps):
+        idx = rng.choice(len(texts), 32, replace=False)
+        enc = proc(text=[texts[i] for i in idx])
+        out = model(enc["input_ids"], enc["attention_mask"], None, enc["input_ids"].masked_fill(enc["attention_mask"] == 0, -100))
+        opt.zero_grad(); out.loss.backward(); opt.step()
+    print(f"  [LM] 손실 {out.loss.item():.3f}", flush=True)
+    for p in model.parameters():
+        p.requires_grad = True
+    model.save_pretrained(LOCAL / "assets")
+    proc.save_pretrained(LOCAL / "assets")
+
+
 def make_zip():
     """Colab용 데이터 zip (구글 드라이브에 올려 압축 해제)."""
     out = ROOT / "Colab_실제판" / "vqa_mock_data.zip"
@@ -233,6 +360,8 @@ def make_zip():
 if __name__ == "__main__":
     jobs = sys.argv[1:] or ["data", "pretrain", "zip"]
     for j in jobs:
+        if j.startswith("fast:"):              # 예: fast:20:20000 (epochs:샘플 수)
+            _, e, n = j.split(":"); pretrain_fast(int(n), int(e)); continue
         if j.startswith("pretrain:"):          # 예: pretrain:3:3000 (epochs:샘플 수) 빠른 확인용
             _, e, n = j.split(":"); pretrain(int(e), int(n)); continue
         {"data": make_data, "pretrain": pretrain, "zip": make_zip}[j]()
