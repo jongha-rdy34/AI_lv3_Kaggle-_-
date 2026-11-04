@@ -1,0 +1,20 @@
+{
+  "V1_restored_and_executed": true,
+  "V1_blank_count": 13,
+  "V2_block_count": 9,
+  "same_completed_functions": true,
+  "q3_valid": 0.4370951920988985,
+  "q3_test": {
+    "metric": "macro_f1",
+    "value": 0.4228472713613055
+  },
+  "q4_test": {
+    "rmse": 11.873449733007142,
+    "qwk": 0.15698838606327603
+  },
+  "baseline_kept_if_candidate_worse": true,
+  "PNG_matches_array": true,
+  "actual_AI_challenge_photos_used": false,
+  "real_LLM_executed": false,
+  "seconds": 44.3
+}

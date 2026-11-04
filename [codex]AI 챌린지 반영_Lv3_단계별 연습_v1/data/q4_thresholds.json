@@ -1,0 +1,9 @@
+{
+  "thresholds": [
+    42.634,
+    47.664,
+    52.811,
+    60.052
+  ],
+  "rule": "np.digitize(score, thresholds), intervals left closed at each threshold"
+}
