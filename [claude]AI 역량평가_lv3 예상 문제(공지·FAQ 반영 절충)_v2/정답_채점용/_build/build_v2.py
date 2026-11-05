@@ -64,7 +64,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, StratifiedKFold
 from sklearn.metrics import f1_score, recall_score, confusion_matrix, cohen_kappa_score
 try:
     from torchvision.transforms import v2 as T
@@ -1319,6 +1319,300 @@ q4_analysis = (
 )
 """)
 
+# ======================================================================  Q4 심화 (선택)
+md(r"""
+---
+## Q4 심화 (선택, +30분) — 증강 강도 · TTA · 앙상블
+
+모델·학습 설정을 더 자유롭게 바꿀 수 있다고 가정한 연습입니다. 4-4에서 찾은 최고 설정(`q4_best`)을 바탕으로 점수를 더 올리고, **validation을 공정하게 쓰는 법**을 확인합니다. 사용법은 `Reference/증강_앙상블.md`에 있습니다.
+
+| 소문항 | 내용 |
+|---|---|
+| 4-7 | 배치 증강 함수를 직접 만들고, 증강 강도(없음/기본/강함)를 같은 조건으로 비교 |
+| 4-8 | TTA: 반전한 사진의 예측을 평균 |
+| 4-9 | seed 앙상블: 같은 설정을 seed만 바꿔 여러 번 학습하고 평균 |
+| 4-10 | K-fold 앙상블: OOF 예측으로 임계값을 정하고 test는 fold 모델 평균 → `제출물/q4_submission_ens.csv` |
+| 4-11 | 분석(서술) |
+
+앙상블이 이득을 보려면 모델들이 **서로 다른 실수**를 해야 합니다. 그리고 임계값처럼 validation으로 맞춘 값이 있으면, 같은 validation으로 잰 점수는 낙관적입니다(4-10에서 다룹니다).
+""")
+
+run(r"""
+# 4-4의 최고 설정 (4-4를 못 풀었으면 기본값)
+Q4X_BASE = dict(q4_best) if "q4_best" in globals() else dict(lr=3e-3, scope=("layer3", "layer4", "fc"), epochs=8, augment=True)
+Q4X_BASE["scope"] = tuple(Q4X_BASE["scope"])
+print("심화의 출발점:", Q4X_BASE)
+""")
+
+md(r"""
+### 4-7 증강 함수 만들기와 강도 비교
+`augment_strong(xb, generator)`: `[0,1]` 배치 `(B,3,H,W)`(H=W)를 받아 **샘플마다** 다음을 적용한 새 텐서를 반환합니다. 입력은 바꾸지 않고, 난수는 모두 `generator`로 뽑습니다.
+1. 좌우 반전 50%, 상하 반전 50%
+2. 90도 회전: 샘플마다 `k ∈ {0,1,2,3}`을 뽑아 `torch.rot90(…, k, dims=(2, 3))`
+3. 대비: 배율 `U(0.8, 1.2)`로 `(x − 사진 평균) × 배율 + 사진 평균`
+4. 밝기: 배율 `U(0.6, 1.1)`을 곱한 뒤 `[0,1]`로 자르기
+
+반점 개수는 반전·회전·밝기·대비로 바뀌지 않으므로 레이블을 지키는 증강입니다. 제공 학습기는 `augment=augment_strong`처럼 함수를 받으면 그 함수로 증강합니다.
+""")
+
+write(r"""
+def augment_strong(xb, generator):
+    xb = xb.___()                                            # 입력을 바꾸지 않도록
+    n = len(xb)
+    m = torch.rand(n, generator=generator) < 0.5
+    xb[m] = xb[m].flip(___)                                  # 좌우 = 마지막 축
+    m = torch.rand(n, generator=generator) < 0.5
+    xb[m] = xb[m].flip(2)
+    k = torch.randint(0, ___, (n,), generator=generator)     # 회전 횟수 0~3
+    for r in range(1, 4):
+        sel = k == r
+        if sel.any():
+            xb[sel] = torch.___(xb[sel], r, dims=(2, 3))
+    contrast = torch.empty(n, 1, 1, 1).uniform_(0.8, 1.2, generator=generator)
+    bright = torch.empty(n, 1, 1, 1).uniform_(0.6, 1.1, generator=generator)
+    mean = xb.mean(dim=(1, 2, 3), keepdim=___)              # 사진마다 평균, (n,1,1,1)
+    xb = (xb - mean) * contrast + mean
+    return (xb * bright).___(0, 1)
+""", r"""
+def augment_strong(xb, generator):
+    '''샘플마다 반전·90도 회전·대비·밝기를 적용한 새 배치 [0,1]'''
+    # 작성하세요
+""", r"""
+def augment_strong(xb, generator):
+    xb = xb.clone()                                          # 원본 배치를 바꾸지 않음
+    n = len(xb)
+    # 1. 반전: 샘플마다 따로 동전을 던진다(배치 전체에 같은 변환이면 다양성이 줄어듦)
+    m = torch.rand(n, generator=generator) < 0.5
+    xb[m] = xb[m].flip(3)
+    m = torch.rand(n, generator=generator) < 0.5
+    xb[m] = xb[m].flip(2)
+    # 2. 90도 회전: 잎 방향은 등급과 무관. 정사각형이라 모양이 유지된다
+    k = torch.randint(0, 4, (n,), generator=generator)
+    for r in range(1, 4):
+        sel = k == r
+        if sel.any():
+            xb[sel] = torch.rot90(xb[sel], r, dims=(2, 3))
+    # 3~4. 대비·밝기: 사진마다 다른 배율. 반점 수는 그대로
+    contrast = torch.empty(n, 1, 1, 1).uniform_(0.8, 1.2, generator=generator)
+    bright = torch.empty(n, 1, 1, 1).uniform_(0.6, 1.1, generator=generator)
+    mean = xb.mean(dim=(1, 2, 3), keepdim=True)              # keepdim → (n,1,1,1)로 브로드캐스팅
+    xb = (xb - mean) * contrast + mean
+    return (xb * bright).clamp(0, 1)                         # 정규화 전 [0,1] 범위 유지
+""")
+
+run(r"""
+def _check_4_7():
+    g = torch.Generator().manual_seed(0)
+    x = torch.rand(64, 3, 6, 6) * 0.5
+    x[:, :, 0, 1] = 1.0                                     # 한 점만 밝게 → 위치로 반전·회전 확인
+    before = x.clone()
+    y = augment_strong(x, g)
+    assert torch.equal(x, before), "입력이 바뀌었습니다"
+    assert y.shape == x.shape and float(y.min()) >= 0 and float(y.max()) <= 1
+    pos = {int(t) for t in y.mean(1).flatten(1).argmax(1)}
+    assert len(pos) >= 6, "반전·회전이 샘플마다 적용되지 않았습니다"
+    print(f"밝은 점의 위치 종류 {len(pos)}가지 (반전만이면 최대 4가지)")
+    ps.show_images((augment_strong(gX[:8], g).permute(0, 2, 3, 1).numpy() * 255).astype(np.uint8), ["strong"] * 8)
+attempt("4-7 함수", _check_4_7)
+
+def _compare_aug():
+    _aug_fn = augment_strong if attempt("4-7 재확인", lambda: augment_strong(gX[:2], torch.Generator()).shape) else True
+    rows = []
+    for name, aug in [("없음", False), ("기본", True), ("강함", _aug_fn)]:
+        t0 = time.time()
+        score = trial_fn(**{**Q4X_BASE, "augment": aug})
+        rows.append({"증강": name, "val_qwk": round(score, 4), "sec": round(time.time() - t0, 1)})
+    print(pd.DataFrame(rows).to_string(index=False))
+    return rows
+q4x_aug_rows = attempt("4-7 비교", _compare_aug)
+""")
+
+write(r"""
+Q4X_AUG = ___   # 위 표를 보고 고르세요: False(없음), True(기본), augment_strong(강함)
+""", r"""
+Q4X_AUG = None  # 작성하세요: False, True, augment_strong 중 하나 (위 표의 근거로)
+""", r"""
+# 표에서 validation QWK가 가장 높은 것을 고른다. 차이가 아주 작으면(0.005 이내) 단순한 쪽을 택해도 좋다.
+_best_aug = max(q4x_aug_rows, key=lambda r: r["val_qwk"])["증강"] if q4x_aug_rows else "기본"
+Q4X_AUG = {"없음": False, "기본": True, "강함": augment_strong}[_best_aug]
+print("선택한 증강:", _best_aug)
+""")
+
+md(r"""
+### 4-8 TTA (Test-Time Augmentation)
+`predict_tta(model, x, device, views=TTA_VIEWS)`: `views`의 각 원소는 뒤집을 축의 튜플입니다(`()`는 원본). 원소마다 `x`를 뒤집어 `ps.predict_regressor`로 예측하고, 예측들을 **평균한 numpy 배열 (N,)**을 반환합니다. 반전은 반점 수를 바꾸지 않으므로 같은 답을 기대할 수 있습니다.
+""")
+
+write(r"""
+TTA_VIEWS = [(), (3,), (2,), (2, 3)]        # 원본, 좌우, 상하, 둘 다
+
+def predict_tta(model, x, device, views=TTA_VIEWS):
+    preds = []
+    for dims in views:
+        xv = x.flip(___) if dims else x
+        preds.append(ps.predict_regressor(model, xv, device=device))
+    return np.mean(preds, axis=___)
+""", r"""
+TTA_VIEWS = [(), (3,), (2,), (2, 3)]        # 원본, 좌우, 상하, 둘 다
+
+def predict_tta(model, x, device, views=TTA_VIEWS):
+    '''views마다 뒤집어 예측한 값의 평균 (N,)'''
+    # 작성하세요
+""", r"""
+TTA_VIEWS = [(), (3,), (2,), (2, 3)]        # 원본, 좌우, 상하, 둘 다
+
+def predict_tta(model, x, device, views=TTA_VIEWS):
+    preds = []
+    for dims in views:
+        xv = x.flip(dims) if dims else x                     # () 는 원본 그대로
+        preds.append(ps.predict_regressor(model, xv, device=device))
+    return np.mean(preds, axis=0)                            # 변형별 예측 (V,N) → 평균 (N,)
+""")
+
+run(r"""
+def _check_4_8():
+    m = build_regressor()
+    p = predict_tta(m, gX[:5], DEVICE, views=[(), (3,)])
+    manual = (ps.predict_regressor(m, gX[:5]) + ps.predict_regressor(m, gX[:5].flip(3))) / 2
+    assert p.shape == (5,) and np.allclose(p, manual, atol=1e-5)
+    # 선택한 증강으로 학습한 모델 하나에서 TTA 효과 비교 (임계값은 각각 다시 맞춤)
+    trial_fn(**{**Q4X_BASE, "augment": Q4X_AUG})
+    m, _ = q4_cache[(Q4X_BASE["lr"], Q4X_BASE["scope"], Q4X_BASE["epochs"], Q4X_AUG)]
+    for name, pv in [("단일 예측", ps.predict_regressor(m, gX[g_va], device=DEVICE)), ("TTA 4개 평균", predict_tta(m, gX[g_va], DEVICE))]:
+        print(f"{name:10s} validation QWK {qwk(g_y[g_va], to_grade(pv, fit_thresholds(pv, g_y[g_va]))):.4f}")
+attempt("4-8", _check_4_8)
+""")
+
+md(r"""
+### 4-9 seed 앙상블
+- `train_seed_models(params, seeds)`: seed마다 `ps.seed_everything(s)` 후 `ps.train_regressor(build_regressor(), gX, gY, g_tr, seed=s, device=DEVICE, **params)`로 학습한 모델 리스트
+- `ensemble_predict(models, x, device, tta=True)`: 모델마다 예측(`tta=True`면 `predict_tta`)한 뒤 평균한 (N,)
+""")
+
+write(r"""
+def train_seed_models(params, seeds):
+    models = []
+    for s in seeds:
+        ps.seed_everything(___)                              # 초기화·순서·증강 난수가 모두 달라짐
+        m = ps.train_regressor(build_regressor(), gX, gY, g_tr, seed=___, device=DEVICE, **params)
+        models.append(m)
+    return models
+
+def ensemble_predict(models, x, device, tta=True):
+    preds = [predict_tta(m, x, device) if tta else ps.predict_regressor(m, x, device=device) for m in ___]
+    return np.___(preds, axis=0)
+""", r"""
+def train_seed_models(params, seeds):
+    '''seed마다 학습한 모델 리스트'''
+    # 작성하세요
+
+def ensemble_predict(models, x, device, tta=True):
+    '''모델별 예측의 평균 (N,)'''
+    # 작성하세요
+""", r"""
+def train_seed_models(params, seeds):
+    models = []
+    for s in seeds:
+        ps.seed_everything(s)                                # 새 head 초기화(Dropout·Linear)도 seed마다 달라짐
+        m = ps.train_regressor(build_regressor(), gX, gY, g_tr, seed=s, device=DEVICE, **params)   # 섞는 순서·증강도
+        models.append(m)
+    return models
+
+def ensemble_predict(models, x, device, tta=True):
+    preds = [predict_tta(m, x, device) if tta else ps.predict_regressor(m, x, device=device) for m in models]
+    return np.mean(preds, axis=0)                            # 회귀: 연속 출력을 평균한 뒤 임계값은 나중에
+""")
+
+run(r"""
+Q4X_SEEDS = [42, 7, 2024]
+def _run_4_9():
+    params = {**Q4X_BASE, "augment": Q4X_AUG}
+    with ps.Timer("seed 앙상블 학습"):
+        models = train_seed_models(params, Q4X_SEEDS)
+    rows = []
+    for name, ms in [("seed 42 하나", models[:1]), (f"seed {len(models)}개 평균", models)]:
+        pv = ensemble_predict(ms, gX[g_va], DEVICE)
+        rows.append({"모델": name, "val_qwk": round(qwk(g_y[g_va], to_grade(pv, fit_thresholds(pv, g_y[g_va]))), 4)})
+    each = [ps.predict_regressor(m, gX[g_va], device=DEVICE) for m in models]
+    print(pd.DataFrame(rows).to_string(index=False))
+    print("모델 간 예측 상관(1에 가까울수록 실수가 비슷 → 앙상블 이득 작음):", np.round(np.corrcoef(each)[0, 1:], 3))
+    return models
+q4x_seed_models = attempt("4-9", _run_4_9)
+""")
+
+md(r"""
+### 4-10 K-fold 앙상블과 OOF로 공정하게 재기
+4-8, 4-9의 점수는 **임계값을 점수를 잰 validation으로 맞췄기 때문에** 낙관적입니다. K-fold로 이 문제를 줄입니다.
+
+`kfold_oof(params, n_splits=5, seed=42)`: **학습 데이터 1,000장 전체**를 `StratifiedKFold(n_splits, shuffle=True, random_state=seed)`로 나눕니다. fold마다
+1. 나머지 fold로 학습(`ps.seed_everything(seed + fold)`, `seed=seed + fold`)
+2. 그 fold의 사진을 `predict_tta`로 예측해 `oof`의 해당 위치에 저장 — 각 사진을 **그 사진을 학습하지 않은 모델**로 예측
+3. test 전체를 `predict_tta`로 예측해 모음
+
+`(oof (N,), test_mean (N_test,))`를 반환합니다. 아래 셀은 OOF 1,000개로 임계값을 맞추고 OOF QWK를 보고한 뒤, test 평균 예측으로 `제출물/q4_submission_ens.csv`를 만듭니다.
+""")
+
+write(r"""
+def kfold_oof(params, n_splits=5, seed=42):
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)
+    oof = np.zeros(len(g_y))
+    test_preds = []
+    for fold, (tr, va) in enumerate(skf.split(np.zeros(len(g_y)), ___)):    # 층화 기준
+        ps.seed_everything(seed + fold)
+        m = ps.train_regressor(build_regressor(), gX, gY, ___, seed=seed + fold, device=DEVICE, **params)
+        oof[___] = predict_tta(m, gX[va], DEVICE)                           # 학습에 안 쓴 fold만
+        test_preds.append(predict_tta(m, ___, DEVICE))
+    return oof, np.mean(test_preds, axis=0)
+""", r"""
+def kfold_oof(params, n_splits=5, seed=42):
+    '''(oof 예측 (N,), fold 모델들의 test 평균 예측 (N_test,))'''
+    # 작성하세요
+""", r"""
+def kfold_oof(params, n_splits=5, seed=42):
+    skf = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=seed)   # 등급 비율을 fold마다 유지
+    oof = np.zeros(len(g_y))
+    test_preds = []
+    for fold, (tr, va) in enumerate(skf.split(np.zeros(len(g_y)), g_y)):
+        ps.seed_everything(seed + fold)                      # fold마다 다른 seed → 모델 다양성도 확보
+        m = ps.train_regressor(build_regressor(), gX, gY, tr, seed=seed + fold, device=DEVICE, **params)
+        oof[va] = predict_tta(m, gX[va], DEVICE)             # 이 fold는 학습에 쓰지 않음 → 공정한 예측
+        test_preds.append(predict_tta(m, gX_test, DEVICE))   # test는 모든 fold 모델이 예측
+    return oof, np.mean(test_preds, axis=0)
+""")
+
+run(r"""
+def _run_4_10():
+    params = {**Q4X_BASE, "augment": Q4X_AUG}
+    with ps.Timer("5-fold 학습"):
+        oof, test_mean = kfold_oof(params)
+    assert oof.shape == (len(g_y),) and test_mean.shape == (len(gX_test),) and np.all(oof != 0)
+    th = fit_thresholds(oof, g_y)                            # 1,000개 OOF로 임계값 → 덜 낙관적
+    print(f"OOF QWK (1,000장, 임계값 {np.round(th, 2)}): {qwk(g_y, to_grade(oof, th)):.4f}")
+    # 비교: 4-4 단일 모델을 같은 g_va 200장으로 잰 값 (임계값도 g_va로 맞춤 → 낙관적)
+    print("참고: 4-4 단일 모델의 validation QWK", round(float(q4_out[0].val_qwk[0]), 4) if q4_out else None)
+    sub = make_submission(csv("grade", "sample_submission.csv"), g_test_ids, to_grade(test_mean, th), "grade")
+    sub["grade"] = sub["grade"].astype(int)
+    sub.to_csv(ps.SUBMIT / "q4_submission_ens.csv", index=False)
+    print("q4_ens 형식 점검:", ps.check_submission("q4_ens") or "통과")
+    return oof, test_mean, th
+q4x_kfold = attempt("4-10", _run_4_10)
+""")
+
+md(r"""
+### 4-11 분석 (서술)
+`q4x_analysis`에 (1) 증강 강도 비교 결과와 선택 이유, (2) TTA·seed 앙상블이 준 변화와 예측 상관으로 본 이유, (3) OOF QWK가 4-4의 validation QWK와 다른 이유와 **어느 쪽을 최종 제출로 고를지**를 쓰세요(수치 인용). 최종 선택은 아래 로컬 채점을 보기 **전에** 정합니다.
+""")
+
+write(r"""
+q4x_analysis = ""  # 작성하세요
+""", r"""
+q4x_analysis = ""  # 작성하세요
+""", r"""
+q4x_analysis = (
+    "__Q4X_ANALYSIS__"
+)
+""")
+
 # ======================================================================  Q5
 md(r"""
 ---
@@ -1915,7 +2209,9 @@ md(r"""
 run(r"""
 for k in ["q3", "q4", "q5"]:
     print(k, "→", ps.check_submission(k) or "형식 통과")
-for name in ["q1_visual_note", "q2_aug_note", "q3_analysis", "q4_analysis"]:
+if (ps.SUBMIT / "q4_submission_ens.csv").exists():
+    print("q4_ens(심화) →", ps.check_submission("q4_ens") or "형식 통과")
+for name in ["q1_visual_note", "q2_aug_note", "q3_analysis", "q4_analysis", "q4x_analysis"]:
     print(f"{name}: {'작성함' if str(globals().get(name, '')).strip() else '비어 있음'}")
 """)
 
@@ -1923,9 +2219,67 @@ md(r"""
 - 형식 오류가 하나라도 있으면 그 문항은 0점입니다(FAQ). 위 셀이 모두 `형식 통과`인지 확인하세요.
 - 코드 리뷰 관점: 함수마다 한 가지 일, 의미 있는 이름, 핵심 결정에 짧은 주석, 크기·개수 하드코딩 없음(`in_features`, `len(...)`), seed 고정, test 정답·test 점수 미사용, 원본 데이터 불변(`copy`, `clone`), 장치 일치(`.to(DEVICE)`).
 - 커널 재시작 → 모두 실행(Run All) 후 출력이 남은 상태로 저장하세요.
-- 풀이가 끝나면 `python -I 정답_채점용/score_local.py`로 test 기준 통과 여부를 확인하고 `정답_채점용/채점기준.md`와 비교하세요.
+- 풀이가 끝나면 아래 **로컬 채점** 셀로 test 기준 통과 여부와 best 변화를 확인하고 `정답_채점용/채점기준.md`와 비교하세요.
 """)
 
+
+md(r"""
+---
+## 로컬 채점 — 기존 best와 비교 (Kaggle 리더보드 대신)
+
+아래 셀은 `정답_채점용/score_local.py`로 `제출물/`을 채점하고, **지금까지의 best와 이번 점수**를 비교합니다. 기록은 `제출물/_score_history.json`에 쌓입니다. 점수가 오르면 best를 갱신하고, 내려가면 best는 그대로 둡니다. 기록을 처음부터 다시 하려면 그 파일을 지우세요.
+
+- Kaggle 리더보드처럼 "제출 → 점수 확인"을 연습하는 용도입니다. **이 점수를 보고 설정을 다시 고치지 마세요.** 시험에서 test 정답은 없고, 리더보드 점수에 맞춰 고치면 리더보드에 과적합합니다. 설정은 validation으로만 정합니다.
+- Q4 심화를 풀었다면 단일 모델(`q4`)과 앙상블(`q4_ens`)을 같은 실행에서 비교해 보여 줍니다.
+""")
+
+run(r"""
+import subprocess
+
+def local_score():
+    cmd = [sys.executable, "-I", "-X", "utf8", str(ROOT / "정답_채점용" / "score_local.py"), str(ps.SUBMIT), "--json"]
+    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
+    lines = proc.stdout.strip().splitlines()
+    print("\n".join(l for l in lines if not l.startswith("SCORES_JSON")))
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr.strip()[-500:])
+    return json.loads(next(l for l in lines if l.startswith("SCORES_JSON"))[len("SCORES_JSON "):])
+
+def compare_with_best(scored, history_path=ps.SUBMIT / "_score_history.json"):
+    hist = json.loads(history_path.read_text(encoding="utf-8")) if history_path.exists() else {"best": {}, "runs": []}
+    now = time.strftime("%Y-%m-%d %H:%M:%S")
+    rows = []
+    for kind, r in scored["results"].items():
+        new = r["score"] if r["score"] is not None else 0.0          # 형식 오류 → 0점
+        old = hist["best"].get(kind, {}).get("score")
+        if old is None:
+            status = "첫 기록"
+        elif new > old + 1e-9:
+            status = "▲ best 갱신"
+        elif new < old - 1e-9:
+            status = "▼ 하락 (best 유지)"
+        else:
+            status = "= 같음"
+        rows.append({"문항": kind, "기준": scored["thresholds"][kind], "기존 best": old, "이번 점수": round(new, 4),
+                     "변화": None if old is None else round(new - old, 4), "PASS": r["pass"], "상태": status})
+        if old is None or new > old:
+            hist["best"][kind] = {"score": new, "pass": r["pass"], "time": now}
+    hist["runs"].append({"time": now, "scores": {k: (v["score"] or 0.0) for k, v in scored["results"].items()}})
+    history_path.write_text(json.dumps(hist, ensure_ascii=False, indent=1), encoding="utf-8")
+    print("\n" + pd.DataFrame(rows).to_string(index=False))
+    res = scored["results"]
+    if "q4" in res and "q4_ens" in res:
+        a, b = res["q4"]["score"] or 0.0, res["q4_ens"]["score"] or 0.0
+        print(f"\nQ4 이번 실행: 단일 모델 {a:.4f} → 앙상블 {b:.4f} ({b - a:+.4f})")
+    q4_best = max([hist["best"][k]["score"] for k in ("q4", "q4_ens") if k in hist["best"]], default=None)
+    if q4_best is not None:
+        print(f"Q4 지금까지의 best (단일·앙상블 중): {q4_best:.4f}")
+    print(f"채점 {len(hist['runs'])}회째 | 기록: {history_path.relative_to(ROOT)}")
+
+scored = attempt("로컬 채점", local_score)
+if scored:
+    compare_with_best(scored)
+""")
 
 # ======================================================================
 def build(kind):

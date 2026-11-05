@@ -6,6 +6,9 @@
 - `stratify=labels`: 나눈 두 쪽의 클래스 비율을 원래와 같게(층화). 불균형 데이터에서 소수 클래스가 한쪽에 몰리지 않게 합니다.
 - 위치 배열을 나누는 형태: `tr, va = train_test_split(np.arange(n), test_size=0.2, random_state=42, stratify=y)`
 
+### `sklearn.model_selection.StratifiedKFold(n_splits=5, shuffle=False, random_state=None)`
+- `skf.split(X, y)` → fold마다 `(train_idx, valid_idx)`. 각 fold의 클래스 비율을 전체와 같게 유지. `X`는 길이만 쓰므로 `np.zeros(len(y))`도 됩니다. 사용 예는 `증강_앙상블.md`.
+
 ### `sklearn.metrics.f1_score(y_true, y_pred, average="binary", labels=None)`
 - `average="macro"`: 클래스별 F1의 단순 평균(클래스 크기와 무관하게 같은 무게). `"weighted"`: 클래스 크기로 가중 평균. `"micro"`: 전체 TP·FP·FN으로 계산(다중 클래스에서는 정확도와 같음).
 - 불균형 데이터에서 소수 클래스를 놓치면 macro가 크게 떨어집니다.

@@ -16,6 +16,8 @@
 
 ### 연산
 - `x.flip(dims)`: 지정 축 뒤집기. 이미지 `(C,H,W)`에서 좌우는 `flip(-1)`, 상하는 `flip(-2)`.
+- `torch.rot90(x, k, dims)`: 90도 회전 `k`번. 배치 `(B,C,H,W)`는 `dims=(2, 3)`
+- `x.mean(dim, keepdim=False)`: `keepdim=True`면 집계한 축을 길이 1로 남김(브로드캐스팅용)
 - `x.clamp(min, max)`: 범위 자르기
 - `x.clone()`: 사본(원본을 바꾸지 않으려면)
 - `x.argmax(dim)`: 최댓값 위치 · `x.exp()`, `x.log()`, `x.mean()`, `x.sum()`

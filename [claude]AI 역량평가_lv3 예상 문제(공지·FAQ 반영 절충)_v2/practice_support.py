@@ -212,7 +212,9 @@ def train_regressor(model, x, y, train_idx, scope=("fc",), lr=1e-3, epochs=5, au
     """Q4 제공 학습기. x: [0,1] float (N,3,H,W), y: float 등급.
 
     scope: 학습할 파라미터 이름 접두어. 범위 밖 파라미터는 고정하고 범위 밖 BN은 eval()로 둡니다.
-    augment=True면 배치마다 좌우·상하 반전과 밝기 배율 U(0.6, 1.1)을 적용합니다. 손실은 MSE입니다.
+    augment=True면 배치마다 좌우·상하 반전과 밝기 배율 U(0.6, 1.1)을 적용합니다.
+    augment에 함수 fn(xb, generator) -> xb 를 주면 그 함수로 증강합니다(xb: CPU의 [0,1] 배치, 정규화 전).
+    손실은 MSE입니다.
     """
     scope = tuple(scope)
     model.to(device)
@@ -233,7 +235,8 @@ def train_regressor(model, x, y, train_idx, scope=("fc",), lr=1e-3, epochs=5, au
             b = order[s:s + batch_size]
             xb = x[b]
             if augment:
-                xb = _augment_batch(xb, g)
+                fn = augment if callable(augment) else _augment_batch
+                xb = fn(xb, g)
             xb, yb = _normalize_batch(xb.to(device)), y[b].to(device)
             opt.zero_grad()
             loss_fn(model(xb).squeeze(1), yb).backward()

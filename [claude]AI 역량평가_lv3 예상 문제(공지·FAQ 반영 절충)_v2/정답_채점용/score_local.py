@@ -1,9 +1,11 @@
 """로컬 연습 채점기 (Kaggle 리더보드 대신). 실제 SSAFY 채점·코드 리뷰가 아닙니다.
 
-사용: python -I 정답_채점용/score_local.py [제출 폴더]   (기본: 모의문제 루트의 제출물/)
+사용: python -I -X utf8 정답_채점용/score_local.py [제출 폴더] [--json]
+      (기본 폴더: 모의문제 루트의 제출물/. --json이면 마지막 줄에 'SCORES_JSON {...}'를 출력)
 
-FAQ 반영: 제출 형식이 틀리면 그 문항은 0점으로 처리합니다(형식 검사는 practice_support.check_submission).
-성능 기준(이 모의의 가정): Q3 macro-F1 ≥ 0.88, Q4 QWK ≥ 0.90, Q5 필드 정확도 ≥ 0.95 + 자료형 위반 0
+FAQ 반영: 제출 형식이 틀리면 그 문항은 0점으로 처리합니다(형식 검사는 submission_check.check_submission).
+성능 기준(이 모의의 가정): Q3 macro-F1 ≥ 0.88, Q4 QWK ≥ 0.90(심화 q4_ens도 같은 기준),
+                          Q5 필드 정확도 ≥ 0.95 + 스키마 위반 0
 """
 import json
 import sys
@@ -17,8 +19,10 @@ ROOT = HERE.parent
 sys.path.insert(0, str(ROOT))
 import submission_check as ps  # noqa: E402  (torch 없이 동작)
 
-SUBMIT = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else ROOT / "제출물"
-THRESH = {"q3": 0.88, "q4": 0.90, "q5": 0.95}
+ARGS = [a for a in sys.argv[1:] if not a.startswith("--")]
+AS_JSON = "--json" in sys.argv
+SUBMIT = Path(ARGS[0]).resolve() if ARGS else ROOT / "제출물"
+THRESH = {"q3": 0.88, "q4": 0.90, "q4_ens": 0.90, "q5": 0.95}
 KEYS = ["age", "sex", "chief_complaint", "symptom_days", "temperature_c", "medications", "allergy", "follow_up_days"]
 COMPLAINTS = ["fever", "cough", "headache", "abdominal_pain", "rash"]
 GENERICS = ["acetaminophen", "ibuprofen", "amoxicillin", "cetirizine"]
@@ -37,12 +41,6 @@ def qwk(a, b, n=5):
     i, j = np.indices((n, n)); W = (i - j) ** 2 / (n - 1) ** 2
     E = np.outer(O.sum(1), O.sum(0)) / O.sum()
     return float(1 - (W * O).sum() / (W * E).sum())
-
-
-def verdict(kind, score, extra=""):
-    ok = score >= THRESH[kind]
-    print(f"{kind}: {score:.4f} (기준 {THRESH[kind]}) → {'PASS' if ok else 'FAIL'}{extra}")
-    return ok
 
 
 def schema_violation(rec):
@@ -66,26 +64,38 @@ def schema_violation(rec):
     return bool(list(jsonschema.Draft202012Validator(schema).iter_errors(rec)))
 
 
-results = {}
-for kind, col, truth_name in [("q3", "label", "q3_truth.csv"), ("q4", "grade", "q4_truth.csv")]:
+# 결과: kind → {"score": float|None, "pass": bool, "note": str}. 제출하지 않은 선택 문항은 빠집니다.
+RESULTS = {}
+
+
+def record(kind, score, ok, note=""):
+    RESULTS[kind] = {"score": None if score is None else round(float(score), 4), "pass": bool(ok), "note": note}
+    shown = "0점(형식 오류)" if score is None else f"{score:.4f}"
+    print(f"{kind}: {shown} (기준 {THRESH[kind]}) → {'PASS' if ok else 'FAIL'}{(' | ' + note) if note else ''}")
+
+
+for kind, col, truth_name in [("q3", "label", "q3_truth.csv"), ("q4", "grade", "q4_truth.csv"),
+                              ("q4_ens", "grade", "q4_truth.csv")]:
+    if kind == "q4_ens" and not (SUBMIT / ps.GUIDE[kind]["file"]).exists():
+        print("q4_ens: 제출 없음 (Q4 심화는 선택 문항)")
+        continue
     problems = ps.check_submission(kind, SUBMIT)
     if problems:
-        print(f"{kind}: 형식 오류 → 0점 | {problems}")
-        results[kind] = False
+        record(kind, None, False, f"형식 오류 {problems}")
         continue
     sub = pd.read_csv(SUBMIT / ps.GUIDE[kind]["file"], dtype={"id": str})
     m = pd.read_csv(HERE / truth_name, dtype={"id": str}).merge(sub, on="id", suffixes=("_t", "_p"))
     y, p = m[f"{col}_t"].to_numpy(), m[f"{col}_p"].to_numpy()
     if kind == "q3":
-        rec = np.mean(p[y == "multiple"] == "multiple")
-        results[kind] = verdict(kind, macro_f1(y, p), f" | multiple 재현율 {rec:.3f}")
+        score = macro_f1(y, p)
+        record(kind, score, score >= THRESH[kind], f"multiple 재현율 {np.mean(p[y == 'multiple'] == 'multiple'):.3f}")
     else:
-        results[kind] = verdict(kind, qwk(y.astype(int), p.astype(int)))
+        score = qwk(y.astype(int), p.astype(int))
+        record(kind, score, score >= THRESH[kind])
 
 problems = ps.check_submission("q5", SUBMIT)
 if problems:
-    print(f"q5: 형식 오류 → 0점 | {problems}")
-    results["q5"] = False
+    record("q5", None, False, f"형식 오류 {problems}")
 else:
     truth = json.loads((HERE / "q5_truth.json").read_text(encoding="utf-8"))
     sub = {}
@@ -109,9 +119,9 @@ else:
                                                      and not isinstance(v, bool) and not isinstance(g, bool))
                 hits.append(v == g and same_type)
     acc = float(np.mean(hits))
-    ok = acc >= THRESH["q5"] and bad == 0
-    print(f"q5: 필드 정확도 {acc:.4f} (기준 {THRESH['q5']}), 스키마 위반 레코드 {bad} (기준 0) → {'PASS' if ok else 'FAIL'}")
-    results["q5"] = ok
+    record("q5", acc, acc >= THRESH["q5"] and bad == 0, f"스키마 위반 레코드 {bad} (기준 0)")
 
-print("\n요약:", " | ".join(f"{k} {'PASS' if v else 'FAIL'}" for k, v in results.items()))
+print("\n요약:", " | ".join(f"{k} {'PASS' if v['pass'] else 'FAIL'}" for k, v in RESULTS.items()))
 print("※ 성능 기준은 이 모의의 가정입니다. 서술·코드 리뷰 항목은 채점기준.md로 스스로 점검하세요.")
+if AS_JSON:
+    print("SCORES_JSON " + json.dumps({"results": RESULTS, "thresholds": THRESH}, ensure_ascii=False))

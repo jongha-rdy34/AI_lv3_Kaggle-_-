@@ -19,6 +19,8 @@ GUIDE = {
                allowed=set(CLASSES)),
     "q4": dict(file="q4_submission.csv", sample=("grade", "sample_submission.csv"), col="grade",
                allowed={0, 1, 2, 3, 4}),
+    "q4_ens": dict(file="q4_submission_ens.csv", sample=("grade", "sample_submission.csv"), col="grade",
+                   allowed={0, 1, 2, 3, 4}),   # Q4 심화(선택) 제출
 }
 
 
@@ -73,7 +75,7 @@ def check_submission(kind, folder=None):
         problems.append("id 순서가 sample_submission과 다름")
     if sub[g["col"]].isna().any():
         problems.append("빈 값 있음")
-    if kind == "q4":
+    if g["col"] == "grade":
         col = sub[g["col"]]
         if not pd.api.types.is_integer_dtype(col):
             problems.append(f"grade가 정수가 아님 (dtype {col.dtype})")
